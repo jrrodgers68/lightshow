@@ -34,9 +34,17 @@ Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 //   NEO_RGBW    Pixels are wired for RGBW bitstream (NeoPixel RGBW products)
 
 
+bool readIncomingCommand();
+void ackCommand();
+void runLightShow(int);
+void processCommands();
 
-void runLightShow();
+#define BUFFER_SIZE 32
 
+char buffer[BUFFER_SIZE];
+int offset;
+int millisOfLastChar;
+int brightness = 5;
 
 // setup() function -- runs once at startup --------------------------------
 
@@ -48,47 +56,190 @@ void setup() {
 #endif
   // END of Trinket-specific code.
 
+  Serial.begin(9600);
+  Serial1.begin(9600);
+
   strip.begin();           // INITIALIZE NeoPixel strip object (REQUIRED)
   strip.show();            // Turn OFF all pixels ASAP
-  strip.setBrightness(50); // Set BRIGHTNESS to about 1/5 (max = 255)
+  strip.setBrightness(brightness); // Set BRIGHTNESS to about 1/5 (max = 255)
 
-  pinMode(A2, INPUT);
+  //pinMode(A2, INPUT);
+  Serial.write("ending setup - getting ready to wait for commands\r\n");
 }
 
-
 // loop() function -- runs repeatedly as long as board is on ---------------
+bool run = false;
+int step = 0;
 
-void loop() {
-
-  int result = digitalRead(A2);
-  if(result)
+bool readIncomingCommand()
+{
+  bool done = false;
+  while(!done)
   {
-    runLightShow();
+    while(Serial1.available())
+    {
+      int val = Serial1.read();
+      char x = (char)val;
+      millisOfLastChar = millis();
+      if(x != '\n')  // end of command marker
+      {
+        if(offset < BUFFER_SIZE-1)
+        {
+          buffer[offset] = x;
+          offset++;
+        }
+        else
+        {
+          Serial.write("buffer limit reached - going to reset and ignore\r\n");
+          memset(buffer, 0, BUFFER_SIZE);
+          offset = 0;
+          return false;
+        }
+      }
+      else
+      {
+        Serial.write("command received\r\n");
+        return true;
+      }  
+    }
   }
-  else
+}
+
+void ackCommand(const char* msg)
+{
+  Serial1.print(msg);    
+  Serial1.print("\n");
+  Serial1.flush();
+}
+
+void loop() 
+{
+  if(Serial1.available())
   {
-    colorWipe(strip.Color(0,   0,   0), 0); // off
+    bool result = readIncomingCommand();
+    if(result)  // end of command marker
+    {
+      Serial.write("processing commands\r\n");
+      processCommands();
+    }
   }
 
+  if(run)
+  {
+    runLightShow(step);
+    step++;
+    if(step > 7)
+      step = 0;
+  }
 }
 
 
 // Some functions of our own for creating animated effects -----------------
 
-void runLightShow()
+void processCommands()
+{
+    buffer[offset] = 0;
+    Serial.write("buffer is: ");
+    Serial.write((const char*)buffer);
+    Serial.write("\r\n");
+    
+    if(buffer[0] == 'B')
+    {
+      ackCommand(buffer);
+      
+      // make number from rest of string
+      buffer[0] = '0';
+      brightness = atoi(buffer);
+      if((brightness > 0)&& (brightness < 250))
+      {
+        Serial.write("\nbrightness set to ");
+        char temp[4];
+        memset(temp, 0, 4);
+        sprintf(temp, "%d", brightness);
+        Serial.write(temp);
+        Serial.write("\r\n");
+        strip.setBrightness(brightness);
+      }
+    }
+    else if(strcmp("START", buffer) == 0)
+    {
+      // start the light show!
+      Serial.write("starting light show\r\n");
+      ackCommand(buffer);
+      run = true;
+    }
+    else if(strcmp("STOP", buffer) == 0)
+    {
+      run = false;
+      ackCommand(buffer);
+      colorWipe(strip.Color(0,   0,   0), 0); // off
+      step = 0;
+      Serial.write("stopped light show\r\n");
+    }
+    else if(strcmp("READY", buffer) == 0)
+    {
+      Serial.write("acking ready request");
+      ackCommand("READY");
+    }
+    else if(strcmp("STATUS", buffer) == 0)
+    {
+      Serial.write("sending status");
+      if(run)
+      {
+        ackCommand("ON");
+        Serial.write("light show is on");
+      }
+      else
+      {
+        ackCommand("OFF");
+        Serial.write("light show is off");
+      }
+    }
+    else
+    {
+      // invalid command so send back INVALID
+      static const char* INVALID = "INVALID";
+      ackCommand(INVALID);
+    }
+    
+    // reset ourselves so ready for next command string
+    //memset(buffer, 0, BUFFER_SIZE);
+    offset = 0;  
+}
+
+void runLightShow(int step)
 {
   // Fill along the length of the strip in various colors...
-  colorWipe(strip.Color(255,   0,   0), 50); // Red
-  colorWipe(strip.Color(  0, 255,   0), 50); // Green
-  colorWipe(strip.Color(  0,   0, 255), 50); // Blue
-
-  // Do a theater marquee effect in various colors...
-  theaterChase(strip.Color(127, 127, 127), 50); // White, half brightness
-  theaterChase(strip.Color(127,   0,   0), 50); // Red, half brightness
-  theaterChase(strip.Color(  0,   0, 127), 50); // Blue, half brightness
-
-  rainbow(10);             // Flowing rainbow cycle along the whole strip
-  theaterChaseRainbow(50); // Rainbow-enhanced theaterChase variant  
+  int delay = 50;
+  switch(step)
+  {
+    case 0:
+      colorWipe(strip.Color(255,   0,   0), delay); // Red
+      break;
+    case 1:
+      colorWipe(strip.Color(  0, 255,   0), delay); // Green
+      break;
+    case 2:
+      colorWipe(strip.Color(  0,   0, 255), delay); // Blue
+      break;
+    case 3:
+      theaterChase(strip.Color(127, 127, 127), delay); // White, half brightness
+      break;
+    case 4:
+      theaterChase(strip.Color(127,   0,   0), delay); // Red, half brightness
+      break;
+    case 5:
+      theaterChase(strip.Color(  0,   0, 127), delay); // Blue, half brightness
+      break;
+    case 6:
+      rainbow(10);             // Flowing rainbow cycle along the whole strip
+      break;
+    case 7:
+      theaterChaseRainbow(delay); // Rainbow-enhanced theaterChase variant  
+      break;
+    default:
+      return;
+  }
 }
 
 // Fill strip pixels one after another with a color. Strip is NOT cleared

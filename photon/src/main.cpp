@@ -51,7 +51,7 @@ char brightness[8];
 unsigned long lastPublish = 0;
 
 void callback(char* topic, byte* payload, unsigned int length);
-MQTT client("192.168.2.226", 1883, callback);
+MQTT client("192.168.2.245", 1883, callback);
 
 // function prototypes
 void connect();
@@ -158,12 +158,10 @@ bool waitForResponseOld(const char* text)
 {
     const int BUFFER_SIZE = 64;
     char buffer[BUFFER_SIZE];
-    //memset(buffer, 0, BUFFER_SIZE);
-    bool done = false;
     int offset = 0;
     int startMillis = millis();
 
-    while(!done)
+    while(true)
     {
         while(Serial1.available() > 0)
         {

@@ -6,6 +6,6 @@
         "*.ino": "cpp"
     },
     "particle.targetDevice": "light_show",
-    "particle.firmwareVersion": "1.5.2",
+    "particle.firmwareVersion": "3.1.0",
     "particle.targetPlatform": "p1"
 }

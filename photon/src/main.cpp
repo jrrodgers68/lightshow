@@ -8,10 +8,15 @@ int LIGHT_SHOW_PIN = D5;
 int lastDSTCheckDay = 0;
 
 void callback(char* topic, byte* payload, unsigned int length);
-MQTT client("192.168.2.226", 1883, callback);
+MQTT client("192.168.50.245", 1883, callback);
 
 // function prototypes
 void connect();
+
+void part_publish(const char* subject, const char* msg)
+{
+    //Particle.publish(subject, msg, 60, PRIVATE);
+}
 
 
 // recieve message
@@ -28,17 +33,17 @@ void callback(char* topic, byte* payload, unsigned int length)
     String ps(p);
     if(reboot.equalsIgnoreCase(ps))
     {
-        Particle.publish("INFO", "Reboot request received", 60, PRIVATE);
+        part_publish("INFO", "Reboot request received");
         System.reset();
     }
     else if(on.equalsIgnoreCase(ps))
     {
-        Particle.publish("INFO", "Received light show start", 60, PRIVATE);
+        part_publish("INFO", "Received light show start");
         digitalWrite(LIGHT_SHOW_PIN, HIGH);
     }
     else if(off.equalsIgnoreCase(ps))
     {
-        Particle.publish("INFO", "Received light show stop", 60, PRIVATE);
+        part_publish("INFO", "Received light show stop");
         digitalWrite(LIGHT_SHOW_PIN, LOW);
     }
 
@@ -126,9 +131,9 @@ void connect()
 
     if(!client.isConnected())
     {
-        Particle.publish("MQTT", "Connecting", 60 , PRIVATE);
+        part_publish("MQTT", "Connecting");
         client.connect("lightshow");
-        Particle.publish("MQTT", "Connected", 60, PRIVATE);
+        part_publish("MQTT", "Connected");
 
         client.subscribe(deviceTopic);
     }
